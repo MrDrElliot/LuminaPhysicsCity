@@ -1,0 +1,8 @@
+{
+    "ProjectSettings": {
+        "CookRoots": [],
+        "EditorStartupMap": "/Game/Content/City",
+        "GameInstanceClass": "",
+        "GameStartupMap": "/Game/Content/City"
+    }
+}

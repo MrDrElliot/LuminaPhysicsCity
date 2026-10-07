@@ -1,0 +1,12 @@
+{
+    "Name": "PhysicsCity",
+    "ProjectID": "1312e8d2-fa80-4adb-9f8f-ac459bc5bf74",
+    "Description": "Destructible box city for physics stress testing",
+    "Version": "0.0.1",
+    "Plugins": [
+        {
+            "Name": "MCP",
+            "Enabled": true
+        }
+    ]
+}
