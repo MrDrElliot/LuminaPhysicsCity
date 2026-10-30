@@ -125,7 +125,25 @@ public sealed partial class PhysicsCity : CEntityScript
         World.DebugDraw.DrawText($"Physics City  {1000.0f / Math.Max(SmoothedFrameMs, 0.01f):F0} fps  {SmoothedFrameMs:F2} ms", White);
         World.DebugDraw.DrawText($"Bodies {DynamicBodies.Count + Projectiles.Count:N0}  awake ~{AwakeEstimate:N0}  projectiles {Projectiles.Count:N0}  built in {BuildMs:F0} ms", White);
         World.DebugDraw.DrawText($"Tool [{(int)Tool + 1}] {Tool}  power {Power:F1}x  fly speed {FlySpeed:F0} m/s", Accent);
+        if (World.Input.IsGamepadConnected())
+        {
+            FVector2 Left = World.Input.GetGamepadLeftStick();
+            FVector2 Right = World.Input.GetGamepadRightStick();
+            World.DebugDraw.DrawText($"Pad  last used {World.Input.GetLastUsedDevice()}  L ({Left.X:F2}, {Left.Y:F2})  R ({Right.X:F2}, {Right.Y:F2})  L2 {World.Input.GetGamepadAxis(EGamepadAxis.LeftTrigger):F2}  R2 {World.Input.GetGamepadAxis(EGamepadAxis.RightTrigger):F2}", Dim);
+        }
+        else
+        {
+            World.DebugDraw.DrawText("Pad  not connected", Dim);
+        }
+
+        if (UsingGamepad)
+        {
+            DrawCrosshair();
+            World.DebugDraw.DrawText("L stick fly  R stick look  L1/R1 down/up  L2 fast  L3 slow  R2 use tool", Dim);
+            World.DebugDraw.DrawText("D-pad left/right tool  up/down power  A bomb rain  X earthquake  View rebuild  Menu quit", Dim);
+            return;
+        }
         World.DebugDraw.DrawText("RMB look  WASD fly  Q/E down/up  Shift fast  wheel speed  LMB use tool  1-4 tools  [ ] power", Dim);
-        World.DebugDraw.DrawText("B bomb rain  G earthquake  R rebuild city", Dim);
+        World.DebugDraw.DrawText("B bomb rain  G earthquake  R rebuild city  Esc quit", Dim);
     }
 }

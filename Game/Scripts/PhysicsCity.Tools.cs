@@ -74,21 +74,24 @@ public sealed partial class PhysicsCity
             ApplyCameraRotation();
         }
 
+        TickPadLook(DeltaTime);
+
         float Wheel = World.Input.GetMouseWheel();
         if (Wheel != 0.0f)
         {
             FlySpeed = Math.Clamp(FlySpeed * (Wheel > 0.0f ? 1.25f : 0.8f), 2.0f, 600.0f);
         }
 
-        float Forward = Axis(EKey.W, EKey.S);
-        float Right = Axis(EKey.D, EKey.A);
-        float Up = Axis(EKey.E, EKey.Q);
+        FVector3 Pad = PadMove();
+        float Forward = Math.Clamp(Axis(EKey.W, EKey.S) + Pad.X, -1.0f, 1.0f);
+        float Right = Math.Clamp(Axis(EKey.D, EKey.A) + Pad.Y, -1.0f, 1.0f);
+        float Up = Math.Clamp(Axis(EKey.E, EKey.Q) + Pad.Z, -1.0f, 1.0f);
         if (Forward == 0.0f && Right == 0.0f && Up == 0.0f)
         {
             return;
         }
 
-        float Speed = FlySpeed;
+        float Speed = FlySpeed * PadSpeedScale();
         if (World.Input.IsKeyDown(EKey.LeftShift))
         {
             Speed *= 4.0f;
@@ -99,7 +102,12 @@ public sealed partial class PhysicsCity
         }
 
         FVector3 Move = World.Camera.GetViewForward() * Forward + World.Camera.GetViewRight() * Right + FVector3.Up * Up;
-        World.SetEntityLocation(CameraEntity, World.GetEntityLocation(CameraEntity) + Move.NormalizedOr(FVector3.Zero) * Speed * DeltaTime);
+        float Length = Move.Length;
+        if (Length > 1.0f)
+        {
+            Move = Move * (1.0f / Length);
+        }
+        World.SetEntityLocation(CameraEntity, World.GetEntityLocation(CameraEntity) + Move * Speed * DeltaTime);
     }
 
     private float Axis(EKey Positive, EKey Negative)
@@ -118,20 +126,27 @@ public sealed partial class PhysicsCity
             return;
         }
 
+        if (World.Input.WasKeyPressed(EKey.Escape) || PadPressed(EGamepadButton.Start))
+        {
+            Engine.Quit();
+            return;
+        }
+
         if (World.Input.WasKeyPressed(EKey.D1)) { Tool = EWreckTool.Blast; }
         if (World.Input.WasKeyPressed(EKey.D2)) { Tool = EWreckTool.Cannon; }
         if (World.Input.WasKeyPressed(EKey.D3)) { Tool = EWreckTool.Fracture; }
         if (World.Input.WasKeyPressed(EKey.D4)) { Tool = EWreckTool.Meteor; }
         if (World.Input.WasKeyPressed(EKey.RightBracket)) { Power = Math.Min(Power * 1.5f, 20.0f); }
         if (World.Input.WasKeyPressed(EKey.LeftBracket)) { Power = Math.Max(Power / 1.5f, 0.1f); }
+        CyclePadTool();
 
-        if (World.Input.WasKeyPressed(EKey.R))
+        if (World.Input.WasKeyPressed(EKey.R) || PadPressed(EGamepadButton.Back))
         {
             DestroyCity();
             BuildCity();
             return;
         }
-        if (World.Input.WasKeyPressed(EKey.G))
+        if (World.Input.WasKeyPressed(EKey.G) || PadPressed(EGamepadButton.FaceLeft))
         {
             Earthquake();
         }
@@ -142,13 +157,13 @@ public sealed partial class PhysicsCity
             return;
         }
 
-        if (World.Input.WasKeyPressed(EKey.B) && TraceAim(Aim, out SRayResult RainHit))
+        if ((World.Input.WasKeyPressed(EKey.B) || PadPressed(EGamepadButton.FaceBottom)) && TraceAim(Aim, out SRayResult RainHit))
         {
             BombRain(RainHit.Location);
         }
 
-        bool bPressed = World.Input.WasMouseButtonPressed(EMouseKey.ButtonLeft);
-        bool bHeld = World.Input.IsMouseButtonDown(EMouseKey.ButtonLeft);
+        bool bPressed = World.Input.WasMouseButtonPressed(EMouseKey.ButtonLeft) || PadPressed(EGamepadButton.RightTrigger);
+        bool bHeld = World.Input.IsMouseButtonDown(EMouseKey.ButtonLeft) || PadDown(EGamepadButton.RightTrigger);
         switch (Tool)
         {
         case EWreckTool.Cannon:
@@ -182,7 +197,7 @@ public sealed partial class PhysicsCity
     // While looking the cursor is captured, so aim goes through the screen center like a crosshair.
     private SWorldRay AimRay()
     {
-        return bLooking
+        return bLooking || UsingGamepad
             ? World.Camera.ViewportCenterRay()
             : World.Camera.ScreenToWorldRay(World.Input.GetMousePosition());
     }
