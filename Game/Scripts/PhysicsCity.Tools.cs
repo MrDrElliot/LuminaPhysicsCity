@@ -19,7 +19,7 @@ public sealed partial class PhysicsCity
     private const float ReachMeters = 3000.0f;
     private const float ProjectileLifetime = 25.0f;
 
-    private Entity CameraEntity = Entity.Null;
+    private FEntity CameraEntity = FEntity.Null;
     private float Yaw = 40.0f;
     private float Pitch = -18.0f;
     private bool bLooking;
@@ -27,7 +27,7 @@ public sealed partial class PhysicsCity
     private EWreckTool Tool = EWreckTool.Cannon;
     private float Power = 1.0f;
     private float FireCooldown;
-    private readonly List<(Entity Body, double Expires)> Projectiles = new();
+    private readonly List<(FEntity Body, double Expires)> Projectiles = new();
     private readonly List<(FVector3 Point, double Time, float Radius, float Strength)> PendingBlasts = new();
 
     private void SetupCamera()
@@ -35,16 +35,13 @@ public sealed partial class PhysicsCity
         float Span = Math.Max(BlocksX, BlocksZ) * (BlockSize + StreetWidth);
         FVector3 Start = new(-Span * 0.55f, Span * 0.22f, -Span * 0.55f);
         CameraEntity = World.CreateEntity("WreckerCamera", Start);
-        SCameraComponent? Camera = Registry.GetOrAdd<SCameraComponent>(CameraEntity);
-        if (Camera is not null)
-        {
-            Camera.FOV = 75.0f;
-            Camera.NearPlane = 0.1f;
-            Camera.FarPlane = 4000.0f;
-        }
-        CCameraLibrary.SetActiveCamera(World, CameraEntity, 0.0f, ECameraBlendFunction.Linear);
-        CInputLibrary.SetInputMode(World, EInputMode.Game);
-        CInputLibrary.SetMouseMode(World, EMouseMode.Normal);
+        ref SCameraComponent Camera = ref World.GetOrEmplaceComponent<SCameraComponent>(CameraEntity);
+        Camera.FOV = 75.0f;
+        Camera.NearPlane = 0.1f;
+        Camera.FarPlane = 4000.0f;
+        World.Camera.SetActiveCamera(CameraEntity, 0.0f, ECameraBlendFunction.Linear);
+        World.Input.SetInputMode(EInputMode.Game);
+        World.Input.SetMouseMode(EMouseMode.Normal);
         ApplyCameraRotation();
     }
 
@@ -57,27 +54,27 @@ public sealed partial class PhysicsCity
 
     private void TickCamera(float DeltaTime)
     {
-        if (!World.IsValidEntity(CameraEntity) || !CInputLibrary.IsReceivingInput(World))
+        if (!World.IsValidEntity(CameraEntity) || !World.Input.IsReceivingInput())
         {
             return;
         }
 
-        bool bWantsLook = CInputLibrary.IsMouseButtonDown(World, EMouseKey.ButtonRight);
+        bool bWantsLook = World.Input.IsMouseButtonDown(EMouseKey.ButtonRight);
         if (bWantsLook != bLooking)
         {
             bLooking = bWantsLook;
-            CInputLibrary.SetMouseMode(World, bLooking ? EMouseMode.Captured : EMouseMode.Normal);
+            World.Input.SetMouseMode(bLooking ? EMouseMode.Captured : EMouseMode.Normal);
         }
 
         if (bLooking)
         {
-            FVector2 Mouse = CInputLibrary.GetMouseDelta(World);
+            FVector2 Mouse = World.Input.GetMouseDelta();
             Yaw += Mouse.X * LookSensitivity;
             Pitch = Math.Clamp(Pitch - Mouse.Y * LookSensitivity, -89.0f, 89.0f);
             ApplyCameraRotation();
         }
 
-        float Wheel = CInputLibrary.GetMouseWheel(World);
+        float Wheel = World.Input.GetMouseWheel();
         if (Wheel != 0.0f)
         {
             FlySpeed = Math.Clamp(FlySpeed * (Wheel > 0.0f ? 1.25f : 0.8f), 2.0f, 600.0f);
@@ -92,22 +89,22 @@ public sealed partial class PhysicsCity
         }
 
         float Speed = FlySpeed;
-        if (CInputLibrary.IsKeyDown(World, EKey.LeftShift))
+        if (World.Input.IsKeyDown(EKey.LeftShift))
         {
             Speed *= 4.0f;
         }
-        if (CInputLibrary.IsKeyDown(World, EKey.LeftControl))
+        if (World.Input.IsKeyDown(EKey.LeftControl))
         {
             Speed *= 0.25f;
         }
 
-        FVector3 Move = CCameraLibrary.GetViewForward(World) * Forward + CCameraLibrary.GetViewRight(World) * Right + FVector3.Up * Up;
+        FVector3 Move = World.Camera.GetViewForward() * Forward + World.Camera.GetViewRight() * Right + FVector3.Up * Up;
         World.SetEntityLocation(CameraEntity, World.GetEntityLocation(CameraEntity) + Move.NormalizedOr(FVector3.Zero) * Speed * DeltaTime);
     }
 
     private float Axis(EKey Positive, EKey Negative)
     {
-        return (CInputLibrary.IsKeyDown(World, Positive) ? 1.0f : 0.0f) - (CInputLibrary.IsKeyDown(World, Negative) ? 1.0f : 0.0f);
+        return (World.Input.IsKeyDown(Positive) ? 1.0f : 0.0f) - (World.Input.IsKeyDown(Negative) ? 1.0f : 0.0f);
     }
 
     private void TickTools(float DeltaTime)
@@ -116,42 +113,42 @@ public sealed partial class PhysicsCity
         DetonateDueBlasts();
         FireCooldown -= DeltaTime;
 
-        if (!CInputLibrary.IsReceivingInput(World))
+        if (!World.Input.IsReceivingInput())
         {
             return;
         }
 
-        if (CInputLibrary.WasKeyPressed(World, EKey.D1)) { Tool = EWreckTool.Blast; }
-        if (CInputLibrary.WasKeyPressed(World, EKey.D2)) { Tool = EWreckTool.Cannon; }
-        if (CInputLibrary.WasKeyPressed(World, EKey.D3)) { Tool = EWreckTool.Fracture; }
-        if (CInputLibrary.WasKeyPressed(World, EKey.D4)) { Tool = EWreckTool.Meteor; }
-        if (CInputLibrary.WasKeyPressed(World, EKey.RightBracket)) { Power = Math.Min(Power * 1.5f, 20.0f); }
-        if (CInputLibrary.WasKeyPressed(World, EKey.LeftBracket)) { Power = Math.Max(Power / 1.5f, 0.1f); }
+        if (World.Input.WasKeyPressed(EKey.D1)) { Tool = EWreckTool.Blast; }
+        if (World.Input.WasKeyPressed(EKey.D2)) { Tool = EWreckTool.Cannon; }
+        if (World.Input.WasKeyPressed(EKey.D3)) { Tool = EWreckTool.Fracture; }
+        if (World.Input.WasKeyPressed(EKey.D4)) { Tool = EWreckTool.Meteor; }
+        if (World.Input.WasKeyPressed(EKey.RightBracket)) { Power = Math.Min(Power * 1.5f, 20.0f); }
+        if (World.Input.WasKeyPressed(EKey.LeftBracket)) { Power = Math.Max(Power / 1.5f, 0.1f); }
 
-        if (CInputLibrary.WasKeyPressed(World, EKey.R))
+        if (World.Input.WasKeyPressed(EKey.R))
         {
             DestroyCity();
             BuildCity();
             return;
         }
-        if (CInputLibrary.WasKeyPressed(World, EKey.G))
+        if (World.Input.WasKeyPressed(EKey.G))
         {
             Earthquake();
         }
 
-        FWorldRay Aim = AimRay();
+        SWorldRay Aim = AimRay();
         if (!Aim.bValid)
         {
             return;
         }
 
-        if (CInputLibrary.WasKeyPressed(World, EKey.B) && TraceAim(Aim, out SRayResult RainHit))
+        if (World.Input.WasKeyPressed(EKey.B) && TraceAim(Aim, out SRayResult RainHit))
         {
             BombRain(RainHit.Location);
         }
 
-        bool bPressed = CInputLibrary.WasMouseButtonPressed(World, EMouseKey.ButtonLeft);
-        bool bHeld = CInputLibrary.IsMouseButtonDown(World, EMouseKey.ButtonLeft);
+        bool bPressed = World.Input.WasMouseButtonPressed(EMouseKey.ButtonLeft);
+        bool bHeld = World.Input.IsMouseButtonDown(EMouseKey.ButtonLeft);
         switch (Tool)
         {
         case EWreckTool.Cannon:
@@ -170,7 +167,7 @@ public sealed partial class PhysicsCity
         case EWreckTool.Fracture:
             if (bPressed && TraceAim(Aim, out SRayResult FractureHit))
             {
-                Shatter(new Entity(FractureHit.Entity), FractureHit.Location);
+                Shatter(new FEntity(FractureHit.Entity), FractureHit.Location);
             }
             break;
         case EWreckTool.Meteor:
@@ -183,20 +180,20 @@ public sealed partial class PhysicsCity
     }
 
     // While looking the cursor is captured, so aim goes through the screen center like a crosshair.
-    private FWorldRay AimRay()
+    private SWorldRay AimRay()
     {
         return bLooking
-            ? CCameraLibrary.ViewportCenterRay(World)
-            : CCameraLibrary.ScreenToWorldRay(World, CInputLibrary.GetMousePosition(World));
+            ? World.Camera.ViewportCenterRay()
+            : World.Camera.ScreenToWorldRay(World.Input.GetMousePosition());
     }
 
-    private bool TraceAim(FWorldRay Aim, out SRayResult Hit)
+    private bool TraceAim(SWorldRay Aim, out SRayResult Hit)
     {
-        Hit = CPhysicsLibrary.Raycast(World, Aim.Origin, Aim.Origin + Aim.Direction * ReachMeters, Entity.Null, ECollisionProfiles.All);
+        Hit = World.Physics.Raycast(Aim.Origin, Aim.Origin + Aim.Direction * ReachMeters, FEntity.Null, ECollisionProfiles.All);
         return Hit.bHit;
     }
 
-    private void FireCannon(FWorldRay Aim)
+    private void FireCannon(SWorldRay Aim)
     {
         FVector3 Muzzle = Aim.Origin + Aim.Direction * 2.0f;
         float Scale = MathF.Sqrt(Power);
@@ -226,31 +223,25 @@ public sealed partial class PhysicsCity
     // A heavy continuous-collision ball, so fast shots cannot tunnel through a one-box wall, that explodes where its arc first meets something.
     private void Launch(FVector3 From, FVector3 Velocity, float Diameter, float Mass, float BlastRadius, float BlastStrength)
     {
-        Entity Shot = World.CreateEntity("Projectile", From, null, new FVector3(Diameter));
-        SStaticMeshComponent? Mesh = Registry.GetOrAdd<SStaticMeshComponent>(Shot);
-        if (Mesh is not null)
+        FEntity Shot = World.CreateEntity("Projectile", From, null, new FVector3(Diameter));
+        ref SStaticMeshComponent Mesh = ref World.GetOrEmplaceComponent<SStaticMeshComponent>(Shot);
+        Mesh.StaticMesh = Ball;
+        if (BoxMaterial is not null)
         {
-            Mesh.StaticMesh = Ball;
-            if (BoxMaterial is not null)
-            {
-                Mesh.SetMaterialAtSlot(BoxMaterial, 0);
-            }
-            Mesh.CustomPrimitiveData.SetAsColor(new FVector4(0.9f, 0.25f, 0.1f, 1.0f));
+            Mesh.SetMaterialAtSlot(BoxMaterial, 0);
         }
+        Mesh.CustomPrimitiveData.SetAsColor(new FVector4(0.9f, 0.25f, 0.1f, 1.0f));
 
-        SRigidBodyComponent? RigidBody = Registry.GetOrAdd<SRigidBodyComponent>(Shot);
-        if (RigidBody is not null)
-        {
-            RigidBody.bOverrideMass = true;
-            RigidBody.Mass = Mass;
-            RigidBody.bUseContinuousCollision = true;
-            RigidBody.RestitutionOverride = 0.1f;
-            RigidBody.FrictionOverride = 0.6f;
-        }
-        Registry.GetOrAdd<SSphereColliderComponent>(Shot);
+        ref SRigidBodyComponent RigidBody = ref World.GetOrEmplaceComponent<SRigidBodyComponent>(Shot);
+        RigidBody.bOverrideMass = true;
+        RigidBody.Mass = Mass;
+        RigidBody.bUseContinuousCollision = true;
+        RigidBody.RestitutionOverride = 0.1f;
+        RigidBody.FrictionOverride = 0.6f;
+        World.GetOrEmplaceComponent<SSphereColliderComponent>(Shot);
 
-        CPhysicsLibrary.SetLinearVelocity(World, Shot, Velocity);
-        World.SetLifetime(Shot, ProjectileLifetime);
+        World.Physics.SetLinearVelocity(Shot, Velocity);
+        World.GetOrEmplaceComponent<SLifetimeComponent>(Shot).Lifetime = ProjectileLifetime;
         Projectiles.Add((Shot, World.ElapsedTime + ProjectileLifetime));
 
         if (BlastRadius > 0.0f && PredictImpact(From, Velocity, out FVector3 ImpactPoint, out float ImpactTime))
@@ -269,7 +260,7 @@ public sealed partial class PhysicsCity
         for (float Elapsed = 0.0f; Elapsed < MaxSeconds; Elapsed += Step)
         {
             FVector3 Next = Position + Velocity * Step;
-            SRayResult Hit = CPhysicsLibrary.Raycast(World, Position, Next, Entity.Null, ECollisionProfiles.All);
+            SRayResult Hit = World.Physics.Raycast(Position, Next, FEntity.Null, ECollisionProfiles.All);
             if (Hit.bHit)
             {
                 Point = Hit.Location;
@@ -307,12 +298,12 @@ public sealed partial class PhysicsCity
     // Pushes everything in the radius outward and a little upward, falling off with distance and scaled by mass so light and heavy pieces fly alike.
     private void Blast(FVector3 Center, float Radius, float Strength)
     {
-        CDebugDrawLibrary.DrawSphere(World, Center, Radius, new FVector4(1.0f, 0.5f, 0.1f, 1.0f), 2.0f, 0.4f);
+        World.DebugDraw.DrawSphere(Center, Radius, new FVector4(1.0f, 0.5f, 0.1f, 1.0f), 2.0f, 0.4f);
 
-        Entity[] Caught = CPhysicsLibrary.OverlapSphere(World, Center, Radius, Entity.Null);
-        foreach (Entity Body in Caught)
+        FEntity[] Caught = World.Physics.OverlapSphere(Center, Radius, FEntity.Null);
+        foreach (FEntity Body in Caught)
         {
-            FVector3 Offset = CPhysicsLibrary.GetBodyPosition(World, Body) - Center;
+            FVector3 Offset = World.Physics.GetBodyPosition(Body) - Center;
             float Distance = Offset.Length;
             float Falloff = Math.Clamp(1.0f - Distance / Radius, 0.0f, 1.0f);
             if (Falloff <= 0.0f)
@@ -321,12 +312,12 @@ public sealed partial class PhysicsCity
             }
 
             FVector3 Direction = (Offset.NormalizedOr(FVector3.Up) + new FVector3(0.0f, 0.5f, 0.0f)).Normalized();
-            float Mass = CPhysicsLibrary.GetMass(World, Body);
-            CPhysicsLibrary.AddImpulse(World, Body, Direction * (Mass * 22.0f * Strength * Falloff));
+            float Mass = World.Physics.GetMass(Body);
+            World.Physics.AddImpulse(Body, Direction * (Mass * 22.0f * Strength * Falloff));
         }
     }
 
-    private void Shatter(Entity Target, FVector3 HitPoint)
+    private void Shatter(FEntity Target, FVector3 HitPoint)
     {
         if (!World.IsValidEntity(Target) || !DynamicBodies.Contains(Target))
         {
@@ -334,15 +325,12 @@ public sealed partial class PhysicsCity
             return;
         }
 
-        SDestructibleComponent? Destructible = Registry.GetOrAdd<SDestructibleComponent>(Target);
-        if (Destructible is not null)
-        {
-            Destructible.FragmentCount = 10;
-            Destructible.ExplosionStrength = 6.0f * Power;
-            Destructible.FragmentLifetime = 20.0f;
-        }
+        ref SDestructibleComponent Destructible = ref World.GetOrEmplaceComponent<SDestructibleComponent>(Target);
+        Destructible.FragmentCount = 10;
+        Destructible.ExplosionStrength = 6.0f * Power;
+        Destructible.FragmentLifetime = 20.0f;
 
-        if (CDestructionLibrary.FractureEntity(World, Target, HitPoint, 8.0f * Power))
+        if (World.FractureEntity(Target, HitPoint, 8.0f * Power))
         {
             DynamicBodies.Remove(Target);
         }
@@ -355,14 +343,14 @@ public sealed partial class PhysicsCity
     private void Earthquake()
     {
         Random Shake = new(Environment.TickCount);
-        foreach (Entity Body in DynamicBodies)
+        foreach (FEntity Body in DynamicBodies)
         {
             if (!World.IsValidEntity(Body))
             {
                 continue;
             }
             FVector3 Kick = new((float)(Shake.NextDouble() * 2.0 - 1.0), (float)Shake.NextDouble() * 0.6f, (float)(Shake.NextDouble() * 2.0 - 1.0));
-            CPhysicsLibrary.AddImpulse(World, Body, Kick * (CPhysicsLibrary.GetMass(World, Body) * 2.5f * Power));
+            World.Physics.AddImpulse(Body, Kick * (World.Physics.GetMass(Body) * 2.5f * Power));
         }
     }
 }

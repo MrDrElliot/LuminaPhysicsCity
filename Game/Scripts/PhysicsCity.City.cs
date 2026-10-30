@@ -87,9 +87,9 @@ public sealed partial class PhysicsCity
         BuildStreetProps(Pitch, Width, Depth);
 
         // Sleeping from the start, so the city costs nothing until something hits it; queued until each body exists.
-        foreach (Entity Body in DynamicBodies)
+        foreach (FEntity Body in DynamicBodies)
         {
-            CPhysicsLibrary.DeactivateBody(World, Body);
+            World.Physics.DeactivateBody(Body);
         }
 
         BuildMs = Stopwatch.GetElapsedTime(Start).TotalMilliseconds;
@@ -98,7 +98,7 @@ public sealed partial class PhysicsCity
 
     private void DestroyCity()
     {
-        foreach (Entity Body in CityEntities)
+        foreach (FEntity Body in CityEntities)
         {
             if (World.IsValidEntity(Body))
             {
@@ -288,35 +288,29 @@ public sealed partial class PhysicsCity
     }
 
     // The primitive meshes span one meter, so the entity scale is the body's size and the collider's default half extent follows it.
-    private Entity SpawnBody(string Name, FVector3 Center, FVector3 Size, FVector4 Color, bool bDynamic, float Mass = 0.0f)
+    private FEntity SpawnBody(string Name, FVector3 Center, FVector3 Size, FVector4 Color, bool bDynamic, float Mass = 0.0f)
     {
-        Entity Body = World.CreateEntity(Name, Center, null, Size);
+        FEntity Body = World.CreateEntity(Name, Center, null, Size);
 
-        SStaticMeshComponent? Mesh = Registry.GetOrAdd<SStaticMeshComponent>(Body);
-        if (Mesh is not null)
+        ref SStaticMeshComponent Mesh = ref World.GetOrEmplaceComponent<SStaticMeshComponent>(Body);
+        Mesh.StaticMesh = Cube;
+        if (BoxMaterial is not null)
         {
-            Mesh.StaticMesh = Cube;
-            if (BoxMaterial is not null)
-            {
-                Mesh.SetMaterialAtSlot(BoxMaterial, 0);
-            }
-            Mesh.CustomPrimitiveData.SetAsColor(Color);
+            Mesh.SetMaterialAtSlot(BoxMaterial, 0);
+        }
+        Mesh.CustomPrimitiveData.SetAsColor(Color);
+
+        ref SRigidBodyComponent RigidBody = ref World.GetOrEmplaceComponent<SRigidBodyComponent>(Body);
+        RigidBody.BodyType = bDynamic ? EBodyType.Dynamic : EBodyType.Static;
+        RigidBody.FrictionOverride = 0.7f;
+        RigidBody.RestitutionOverride = 0.02f;
+        if (bDynamic)
+        {
+            RigidBody.bOverrideMass = true;
+            RigidBody.Mass = Mass > 0.0f ? Mass : Size.X * Size.Y * Size.Z * BuildingDensity;
         }
 
-        SRigidBodyComponent? RigidBody = Registry.GetOrAdd<SRigidBodyComponent>(Body);
-        if (RigidBody is not null)
-        {
-            RigidBody.BodyType = bDynamic ? EBodyType.Dynamic : EBodyType.Static;
-            RigidBody.FrictionOverride = 0.7f;
-            RigidBody.RestitutionOverride = 0.02f;
-            if (bDynamic)
-            {
-                RigidBody.bOverrideMass = true;
-                RigidBody.Mass = Mass > 0.0f ? Mass : Size.X * Size.Y * Size.Z * BuildingDensity;
-            }
-        }
-
-        Registry.GetOrAdd<SBoxColliderComponent>(Body);
+        World.GetOrEmplaceComponent<SBoxColliderComponent>(Body);
 
         CityEntities.Add(Body);
         if (bDynamic)
